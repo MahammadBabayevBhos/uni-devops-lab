@@ -1,0 +1,105 @@
+---
+- name: Deploy student portal
+  hosts: app_servers
+  become: true
+
+  tasks:
+    # --- Docker ---
+    - name: Switch Ubuntu archive to the configured mirror
+      ansible.builtin.replace:
+        path: /etc/apt/sources.list.d/ubuntu.sources
+        regexp: 'http://archive\.ubuntu\.com/ubuntu/?'
+        replace: "{{ ubuntu_mirror }}"
+      when: ubuntu_mirror | length > 0
+      register: mirror
+
+    - name: Install packages required for the Docker repository
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+        state: present
+        update_cache: true
+        cache_valid_time: "{{ 0 if mirror is changed else 3600 }}"
+
+    - name: Create apt keyrings directory
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Download Docker GPG key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+
+    - name: Add Docker apt repository
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/docker.list
+        content: >
+          deb [arch={{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}
+          signed-by=/etc/apt/keyrings/docker.asc]
+          https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+        mode: "0644"
+      register: docker_repo
+
+    - name: Refresh apt cache after adding the Docker repository
+      ansible.builtin.apt:
+        update_cache: true
+      when: docker_repo is changed
+
+    - name: Install Docker Engine and Compose plugin
+      ansible.builtin.apt:
+        name: "{{ docker_packages }}"
+        state: present
+
+    - name: Enable and start Docker service
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    # --- Portal ---
+    - name: Create application directory
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Copy portal files to the server
+      ansible.builtin.copy:
+        src: "{{ project_root }}/{{ item }}"
+        dest: "{{ app_dir }}/"
+        mode: "0644"
+        directory_mode: "0755"
+      loop: "{{ portal_files }}"
+      register: portal_copy
+
+    - name: Write Compose environment file
+      ansible.builtin.template:
+        src: env.j2
+        dest: "{{ app_dir }}/.env"
+        mode: "0644"
+
+    - name: Build image and start Compose services
+      community.docker.docker_compose_v2:
+        project_src: "{{ app_dir }}"
+        state: present
+        # Fayllar dəyişibsə image yenidən yığılır, əks halda mövcud image istifadə olunur
+        build: "{{ 'always' if portal_copy is changed else 'policy' }}"
+
+    # --- Yoxlama ---
+    - name: Check portal /health endpoint
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}:{{ portal_port }}/health"
+        return_content: true
+      register: health
+      until: health.status == 200
+      retries: 15
+      delay: 2
+      changed_when: false
+
+    - name: Show health check result
+      ansible.builtin.debug:
+        msg: "http://{{ ansible_host }}:{{ portal_port }}/health -> {{ health.json }}"
