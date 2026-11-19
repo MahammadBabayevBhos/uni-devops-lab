@@ -1,0 +1,12 @@
+.git
+.gitignore
+.gitattributes
+.env
+*.log
+**/__pycache__
+**/*.pyc
+ansible/
+screenshots/
+README.md
+compose.yml
+Dockerfile
