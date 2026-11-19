@@ -1,0 +1,25 @@
+---
+# Portal
+app_dir: /opt/student-portal
+portal_image: student-portal:1.0
+portal_port: 8080
+
+# Serverə köçürülən fayllar (repository kökünə nisbətən)
+project_root: "{{ playbook_dir }}/.."
+portal_files:
+  - Dockerfile
+  - .dockerignore
+  - compose.yml
+  - app
+
+# Docker
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+# archive.ubuntu.com bu şəbəkədən cavab vermir, Azərbaycan mirror-u istifadə olunur.
+# Boş saxlansa, mirror dəyişdirilmir.
+ubuntu_mirror: http://az.archive.ubuntu.com/ubuntu/
