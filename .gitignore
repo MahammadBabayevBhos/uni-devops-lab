@@ -1,0 +1,27 @@
+# Environment / secrets
+.env
+.env.*
+*.pem
+*.key
+*.ppk
+id_rsa*
+id_ed25519*
+id_ecdsa*
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Ansible
+*.retry
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
